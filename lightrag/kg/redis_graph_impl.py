@@ -5,8 +5,8 @@ import pipmaster as pm
 import configparser
 from contextlib import asynccontextmanager
 
-if not pm.is_installed("falkorDB"):
-    pm.install("falkorDB")
+if not pm.is_installed("falkordb"):
+    pm.install("falkordb")
 
 # aioredis is a depricated library, replaced with redis
 from redis.asyncio import ConnectionPool  # type: ignore

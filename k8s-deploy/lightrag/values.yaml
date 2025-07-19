@@ -42,6 +42,7 @@ env:
 #  LIGHTRAG_VECTOR_STORAGE: QdrantVectorDBStorage
   LIGHTRAG_GRAPH_STORAGE: Neo4JStorage
   # LIGHTRAG_GRAPH_STORAGE: RedisGraphStorage
+  # LIGHTRAG_GRAPH_STORAGE: LsmGraphStorage
   LIGHTRAG_DOC_STATUS_STORAGE: PGDocStatusStorage
   # Replace with your POSTGRES credentials
   POSTGRES_HOST: pg-cluster-postgresql-postgresql

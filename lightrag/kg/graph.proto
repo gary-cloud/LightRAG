@@ -1,0 +1,17 @@
+// graph.proto
+syntax = "proto3";
+
+package graph;
+
+// 节点属性
+message NodeAttributes {
+    string label = 1;  // 节点标签
+    int32 age = 2;     // 节点年龄
+    bool active = 3;   // 节点是否活跃
+}
+
+// 边属性
+message EdgeAttributes {
+    float weight = 1;  // 边的权重
+    string since = 2;  // 边的生效时间
+}

@@ -14,6 +14,7 @@ STORAGE_IMPLEMENTATIONS = {
             "NetworkXStorage",
             "Neo4JStorage",
             "RedisGraphStorage",
+            "LsmGraphStorage",
             "PGGraphStorage",
             # "AGEStorage",
             # "MongoGraphStorage",
@@ -57,6 +58,7 @@ STORAGE_ENV_REQUIREMENTS: dict[str, list[str]] = {
     "NetworkXStorage": [],
     "Neo4JStorage": ["NEO4J_URI", "NEO4J_USERNAME", "NEO4J_PASSWORD"],
     "RedisGraphStorage": ["REDIS_URI"],
+    "LsmGraphStorage": [],
     "MongoGraphStorage": [],
     # "TiDBGraphStorage": ["TIDB_USER", "TIDB_PASSWORD", "TIDB_DATABASE"],
     "AGEStorage": [
@@ -93,6 +95,7 @@ STORAGES = {
     "JsonDocStatusStorage": ".kg.json_doc_status_impl",
     "Neo4JStorage": ".kg.neo4j_impl",
     "RedisGraphStorage": ".kg.redis_graph_impl",
+    "LsmGraphStorage": ".kg.lsm_graph_impl",
     "MilvusVectorDBStorage": ".kg.milvus_impl",
     "MongoKVStorage": ".kg.mongo_impl",
     "MongoDocStatusStorage": ".kg.mongo_impl",

@@ -1,20 +1,20 @@
-import asyncio
 import os
-import inspect
+import asyncio
 import logging
 import logging.config
+import torch.profiler
 from lightrag import LightRAG, QueryParam
-from lightrag.llm.ollama import ollama_model_complete, ollama_embed
+from lightrag.llm.openai import gpt_4o_mini_complete
 from lightrag.llm.ollama import ollama_embed
-from lightrag.utils import EmbeddingFunc, logger, set_verbose_debug, EmbeddingFunc
 from lightrag.kg.shared_storage import initialize_pipeline_status
+from lightrag.utils import logger, set_verbose_debug, EmbeddingFunc
+from pathlib import Path
+import pandas as pd
 
-from dotenv import load_dotenv
-
-load_dotenv(dotenv_path=".env", override=False)
+output_path = Path("./logdir/summary.csv")
 
 WORKING_DIR = "./dickens"
-
+os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 
 def configure_logging():
     """Configure logging for the application"""
@@ -27,10 +27,10 @@ def configure_logging():
 
     # Get log directory path from environment variable or use current directory
     log_dir = os.getenv("LOG_DIR", os.getcwd())
-    log_file_path = os.path.abspath(os.path.join(log_dir, "lightrag_ollama_demo.log"))
+    log_file_path = os.path.abspath(os.path.join(log_dir, "lightrag_demo.log"))
 
-    print(f"\nLightRAG compatible demo log file: {log_file_path}\n")
-    os.makedirs(os.path.dirname(log_file_path), exist_ok=True)
+    print(f"\nLightRAG demo log file: {log_file_path}\n")
+    os.makedirs(os.path.dirname(log_dir), exist_ok=True)
 
     # Get log file max size and backup count from environment variables
     log_max_bytes = int(os.getenv("LOG_MAX_BYTES", 10485760))  # Default 10MB
@@ -83,17 +83,9 @@ if not os.path.exists(WORKING_DIR):
     os.mkdir(WORKING_DIR)
 
 
-async def initialize_rag():
+async def initialize_Hybrid_rag():
     rag = LightRAG(
         working_dir=WORKING_DIR,
-        llm_model_func=ollama_model_complete,
-        llm_model_name=os.getenv("LLM_MODEL", "qwen2.5-coder:7b"),
-        llm_model_max_token_size=8192,
-        llm_model_kwargs={
-            "host": os.getenv("LLM_BINDING_HOST", "http://localhost:11434"),
-            "options": {"num_ctx": 8192},
-            "timeout": int(os.getenv("TIMEOUT", "300")),
-        },
         embedding_func=EmbeddingFunc(
             embedding_dim=int(os.getenv("EMBEDDING_DIM", "1024")),
             max_token_size=int(os.getenv("MAX_EMBED_TOKENS", "8192")),
@@ -103,6 +95,7 @@ async def initialize_rag():
                 host=os.getenv("EMBEDDING_BINDING_HOST", "http://localhost:11434"),
             ),
         ),
+        llm_model_func=gpt_4o_mini_complete,
     )
 
     await rag.initialize_storages()
@@ -110,13 +103,16 @@ async def initialize_rag():
 
     return rag
 
-
-async def print_stream(stream):
-    async for chunk in stream:
-        print(chunk, end="", flush=True)
-
-
 async def main():
+    # Check if OPENAI_API_KEY environment variable exists
+    if not os.getenv("OPENAI_API_KEY"):
+        print(
+            "Error: OPENAI_API_KEY environment variable is not set. Please set this variable before running the program."
+        )
+        print("You can set the environment variable by running:")
+        print("  export OPENAI_API_KEY='your-openai-api-key'")
+        return  # Exit the async function
+    
     try:
         # Clear old data files
         files_to_delete = [
@@ -135,81 +131,49 @@ async def main():
                 os.remove(file_path)
                 print(f"Deleting old file:: {file_path}")
 
-        # Initialize RAG instance
-        rag = await initialize_rag()
+        # 初始化RAG系统
+        rag = await initialize_Hybrid_rag()
 
-        # Test embedding function
+        # 验证 embedding 维度
         test_text = ["This is a test string for embedding."]
         embedding = await rag.embedding_func(test_text)
         embedding_dim = embedding.shape[1]
-        print("\n=======================")
-        print("Test embedding function")
-        print("========================")
-        print(f"Test dict: {test_text}")
-        print(f"Detected embedding dimension: {embedding_dim}\n\n")
+        print(f"\nTest embedding dimension: {embedding_dim}\n")
+        with open("./mama.txt", "r", encoding="utf-8") as f:
+            text_to_insert = f.read()
 
-        with open("./book.txt", "r", encoding="utf-8") as f:
-            await rag.ainsert(f.read())
+        query_text = "尿钠排泄量的增加与人体收缩压舒张压的关系是怎样的？"
 
-        # Perform naive search
-        print("\n=====================")
-        print("Query mode: naive")
-        print("=====================")
-        resp = await rag.aquery(
-            "What are the top themes in this story?",
-            param=QueryParam(mode="naive", stream=True),
-        )
-        if inspect.isasyncgen(resp):
-            await print_stream(resp)
-        else:
-            print(resp)
+        # 开启统一的 PyTorch Profiler 会话
+        with torch.profiler.profile(
+            schedule=torch.profiler.schedule(wait=0, warmup=0, active=10),
+            activities=[torch.profiler.ProfilerActivity.CPU],
+            record_shapes=True,
+            with_stack=True,
+            profile_memory=True,
+            on_trace_ready=torch.profiler.tensorboard_trace_handler(f"./logdir/full_run")
+        ) as prof:
 
-        # Perform local search
-        print("\n=====================")
-        print("Query mode: local")
-        print("=====================")
-        resp = await rag.aquery(
-            "What are the top themes in this story?",
-            param=QueryParam(mode="local", stream=True),
-        )
-        if inspect.isasyncgen(resp):
-            await print_stream(resp)
-        else:
-            print(resp)
+            # -------------------- 索引构建阶段 --------------------
+            print("\n[Profiler] Inserting document...\n")
+            with torch.profiler.record_function("Insert_Documents"):
+                await rag.ainsert(text_to_insert)
+            await asyncio.sleep(1)
 
-        # Perform global search
-        print("\n=====================")
-        print("Query mode: global")
-        print("=====================")
-        resp = await rag.aquery(
-            "What are the top themes in this story?",
-            param=QueryParam(mode="global", stream=True),
-        )
-        if inspect.isasyncgen(resp):
-            await print_stream(resp)
-        else:
-            print(resp)
-
-        # Perform hybrid search
-        print("\n=====================")
-        print("Query mode: hybrid")
-        print("=====================")
-        resp = await rag.aquery(
-            "What are the top themes in this story?",
-            param=QueryParam(mode="hybrid", stream=True),
-        )
-        if inspect.isasyncgen(resp):
-            await print_stream(resp)
-        else:
-            print(resp)
+            # -------------------- 查询阶段 --------------------
+            for mode in ["local", "global", "hybrid"]:
+                print(f"\n[Profiler] Running query mode: {mode}")
+                with torch.profiler.record_function(f"Query_{mode}"):
+                    result = await rag.aquery(query_text, param=QueryParam(mode=mode))
+                    print(result)
+                prof.step()
+                await asyncio.sleep(1)
 
     except Exception as e:
         print(f"An error occurred: {e}")
     finally:
         if rag:
-            await rag.llm_response_cache.index_done_callback()
             await rag.finalize_storages()
-
 
 if __name__ == "__main__":
     # Configure logging before running the main function

@@ -4,8 +4,9 @@ import logging
 import logging.config
 from lightrag import LightRAG, QueryParam
 from lightrag.llm.openai import gpt_4o_mini_complete, openai_embed
+from lightrag.llm.ollama import ollama_embed
 from lightrag.kg.shared_storage import initialize_pipeline_status
-from lightrag.utils import logger, set_verbose_debug
+from lightrag.utils import logger, set_verbose_debug, EmbeddingFunc
 
 WORKING_DIR = "./dickens"
 
@@ -80,7 +81,15 @@ if not os.path.exists(WORKING_DIR):
 async def initialize_rag():
     rag = LightRAG(
         working_dir=WORKING_DIR,
-        embedding_func=openai_embed,
+        embedding_func=EmbeddingFunc(
+            embedding_dim=int(os.getenv("EMBEDDING_DIM", "1024")),
+            max_token_size=int(os.getenv("MAX_EMBED_TOKENS", "8192")),
+            func=lambda texts: ollama_embed(
+                texts,
+                embed_model=os.getenv("EMBEDDING_MODEL", "bge-m3:latest"),
+                host=os.getenv("EMBEDDING_BINDING_HOST", "http://localhost:11434"),
+            ),
+        ),
         llm_model_func=gpt_4o_mini_complete,
     )
 
@@ -131,7 +140,7 @@ async def main():
         print(f"Test dict: {test_text}")
         print(f"Detected embedding dimension: {embedding_dim}\n\n")
 
-        with open("./book.txt", "r", encoding="utf-8") as f:
+        with open("./mama.txt", "r", encoding="utf-8") as f:
             await rag.ainsert(f.read())
 
         # Perform naive search
@@ -140,7 +149,7 @@ async def main():
         print("=====================")
         print(
             await rag.aquery(
-                "What are the top themes in this story?", param=QueryParam(mode="naive")
+                "尿钠排泄量的增加与人体收缩压舒张压的关系是怎样的？", param=QueryParam(mode="naive")
             )
         )
 
@@ -150,7 +159,7 @@ async def main():
         print("=====================")
         print(
             await rag.aquery(
-                "What are the top themes in this story?", param=QueryParam(mode="local")
+                "尿钠排泄量的增加与人体收缩压舒张压的关系是怎样的？", param=QueryParam(mode="local")
             )
         )
 
@@ -160,7 +169,7 @@ async def main():
         print("=====================")
         print(
             await rag.aquery(
-                "What are the top themes in this story?",
+                "尿钠排泄量的增加与人体收缩压舒张压的关系是怎样的？",
                 param=QueryParam(mode="global"),
             )
         )
@@ -171,7 +180,7 @@ async def main():
         print("=====================")
         print(
             await rag.aquery(
-                "What are the top themes in this story?",
+                "尿钠排泄量的增加与人体收缩压舒张压的关系是怎样的？",
                 param=QueryParam(mode="hybrid"),
             )
         )
